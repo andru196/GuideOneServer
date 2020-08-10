@@ -20,22 +20,17 @@ namespace GuideOneServer.Controllers.api
 	public class UserController : G1ControllerBaseController
 	{
 		public UserController(IOptions<Config> c) : base(c) { }
-		//// GET: api/User
-		//[Authorize]
-		//[HttpGet]
-		//public IEnumerable<string> Get()
-		//{
-		//	return new string[] { "value1", "value2" };
-		//}
 
 		[Authorize]
 		[HttpGet]
 		public async Task<JsonResult> Get()
 		{
-			var reqUser = await UserDB.Logout(UserR);
+			User reqUser;
+			using (var db = new UserDB())
+				reqUser = await db.Get(UserR, ((JObject)HttpContext.Items["JSON"]).GetValue("userId").ToObject<int>());
 			var response = new JsonResult(new
 			{
-				Success = reqUser
+				user = reqUser
 			});
 			HttpContext.Items["Response"] = response;
 
@@ -47,11 +42,10 @@ namespace GuideOneServer.Controllers.api
 		[Route("logout")]
 		public async Task<JsonResult> Logout(string code)
 		{
-			var rez = await UserDB.Logout(UserR);
-			var resp = new JsonResult(new 
-			{
-				Success = rez
-			});
+			var rez = false;
+			using (var db = new UserDB())
+				rez = await db.Logout(UserR);
+			var resp = new JsonResult(new { Success = rez });
 			HttpContext.Items["Response"] = resp;
 
 			return resp;
@@ -63,7 +57,9 @@ namespace GuideOneServer.Controllers.api
 		public async Task<JsonResult> Confirm(string code)
 		{
 			code = ((JObject)HttpContext.Items["JSON"]).GetValue("Code").ToString();
-			var rez = await UserDB.Confirm(UserR, code);
+			var rez = false;
+			using (var db = new UserDB())
+				rez = await db.Confirm(UserR, code);
 			var resp = new JsonResult(new
 			{
 				IsConfirmed = rez,
@@ -77,7 +73,7 @@ namespace GuideOneServer.Controllers.api
 		// POST: api/User
 		//[RequireHttps]
 		[HttpPost]
-		public async Task Post()//[FromBody] string value)
+		public async Task Post()
 		{
 			var user = (User)this.HttpContext.Items[typeof(User).Name];
 			if (user.Phone == null || user.PublicKey == null)
@@ -102,20 +98,23 @@ namespace GuideOneServer.Controllers.api
 			var rand = new Random();
 			string code = rand.Next(0, 10).ToString() + rand.Next(0, 10).ToString() + rand.Next(0, 10).ToString()
 					+ rand.Next(0, 10).ToString() + rand.Next(0, 10).ToString() + rand.Next(0, 10).ToString();
-			await UserDB.Register(user, code);
+			using (var db = new UserDB())
+				await db.Register(user, code);
 			var response = new
 			{
 				access_token = user.Token,
 				userId = user.Id,
 				authId = user.AuthId
 			};
+			
 			HttpContext.Items["Response"] =  new JsonResult(response);
 		}
 
 		[NonAction]
 		private async Task<ClaimsIdentity> GetIdentity(User user)
 		{
-			await UserDB.GetRole(user);
+			using (var db = new UserDB()) 
+				await db.GetRole(user);
 			var claims = new List<Claim>
 				{
 					new Claim(ClaimsIdentity.DefaultNameClaimType, user.Phone),
@@ -132,7 +131,8 @@ namespace GuideOneServer.Controllers.api
 		[HttpPut]
 		public async Task<JsonResult> Put()
 		{
-			await UserDB.Edit(UserR);
+			using (var db = new UserDB())
+				await db.Edit(UserR);
 			var resp = new JsonResult(new
 			{
 				User = UserR
@@ -147,7 +147,9 @@ namespace GuideOneServer.Controllers.api
 		[HttpDelete]
 		public async Task<JsonResult> Delete()
 		{
-			var rez = await UserDB.Delete(UserR);
+			var rez = false;
+			using (var db = new UserDB())
+				rez = await db.Delete(UserR);
 			var resp = new JsonResult(new
 			{
 				IsConfirmed = rez

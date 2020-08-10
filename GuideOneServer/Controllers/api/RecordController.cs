@@ -11,28 +11,31 @@ using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Linq;
 using System.IO;
 using GuideOneServer.DataBase;
+using Microsoft.AspNetCore.Authorization;
 
 namespace GuideOneServer.Controllers.api
 {
 	[Route("api/[controller]")]
 	[ApiController]
+	[Authorize]
 	public class RecordController : G1ControllerBaseController
 	{
 	   public RecordController(IOptions<Config> c) : base(c){ }
 		// GET: api/Record
-		
 
-		[HttpGet]
+
+		[HttpPost]
 		[Route("listen")]
-		public async Task<FileResult> Get()
+		public async Task<FileResult> Liseten()
 		{
 			var record = ((JObject)HttpContext.Items["JSON"]).GetValue("Record").ToObject<Record>();
 			record.Path = null;
-			if (record.IsPublic)
-				await RecordDb.GetPublic(record, UserR.Id.Value);
-			else
-				await RecordDb.GetPaid(record, UserR.Id.Value);
-			if (record.Path != null)
+			using (var db = new RecordDb())
+				if (record.IsPublic)
+					await db.GetPublic(record, UserR.Id.Value);
+				else
+					await db.GetPaid(record, UserR.Id.Value);
+			if (record?.Path != null)
 			{
 				FileStream fs = new FileStream(record.Path, FileMode.Open);
 				return File(fs, "application/mp3", record.Name + ".mp3");
@@ -40,40 +43,76 @@ namespace GuideOneServer.Controllers.api
 			return null;
 		}
 
+
+		[HttpPost]
+		[Route("description")]
+		public async Task<JsonResult> Description()
+		{
+			var record = ((JObject)HttpContext.Items["JSON"]).GetValue("Record").ToObject<Record>();
+			record.Path = null;
+			try
+			{
+				using (var db = new RecordDb())
+					if (record.IsPublic)
+						await db.GetPublic(record, UserR.Id.Value);
+					else
+						await db.GetPaid(record, UserR.Id.Value);
+				if (record?.Path != null)
+				{
+					record.PhotoPath = null;
+					record.Path = null;
+					return new JsonResult(record);
+				}
+			}
+			catch (Exception ex) 
+			{ }
+				return null;
+		}
+
+		[HttpPost]
+		[Route("get")]
+		public async Task<JsonResult> GetList()
+		{
+			var mapData = ((JObject)HttpContext.Items["JSON"]).GetValue("MapSpan").ToObject<MapSpan>();
+			using (var db = new RecordDb())
+				return new JsonResult(await db.GetList(mapData, (uint)UserR.Id));
+		}
+
 		// POST: api/Record
 		[HttpPost]
 		public async Task<JsonResult> Post()
 		{
-			var record = ((JObject)HttpContext.Items["JSON"]).GetValue("Record").ToObject<Record>();
+			Record record = null;
+			record = ((JObject)HttpContext.Items["JSON"]).GetValue("Record").ToObject<Record>();
 			record.User = UserR;
-			if (record.Path == null || record.Name == null || record.Point == null ||
-					(!record.IsPaid && !record.IsAnon && !record.IsPublic) || record.Language == null)
+			if (record.Audio == null || record.Name == null || record.Point == null )//|| (!record.IsPaid && !record.IsAnon && !record.IsPublic) || record.Language == null)
 				return null;
+
 			var dirPath = Path.Combine(_config.AutioDirectory, $"userPart{UserR.Id / 1000 + 1}", $"user{UserR.Id}", "audio");
 			if (!Directory.Exists(dirPath))
 				Directory.CreateDirectory(dirPath);
-			var bytes = Convert.FromBase64String(record.Path);
-			record.Path = Path.Combine(dirPath ,$"{UserR.Id}_{DateTime.UtcNow.ToLongDateString()}.wav");
+			var bytes = Convert.FromBase64String(record.Audio);
+			record.Audio = null;
+			record.Path = Path.Combine(dirPath ,$"{UserR.Id}_{DateTime.UtcNow.ToFileTime()}.wav");
 			try
 			{
 				using (var file = System.IO.File.Create(record.Path))
-				{
 					await file.WriteAsync(bytes);
-				}
 				if (record.PhotoPath != null)
 				{
 					dirPath = Path.Combine(_config.PhotoDirectory, $"userPart{UserR.Id / 1000 + 1}", $"user{UserR.Id}", "photo");
 					if (!Directory.Exists(dirPath))
 						Directory.CreateDirectory(dirPath);
 					bytes = Convert.FromBase64String(record.PhotoPath);
-					record.PhotoPath = Path.Combine(dirPath, $"{UserR.Id}_{DateTime.UtcNow.ToLongDateString()}.jpg");
+					record.PhotoPath = Path.Combine(dirPath, $"{UserR.Id}_{DateTime.UtcNow.ToFileTime()}.jpg");
 					using (var file = System.IO.File.Create(record.PhotoPath))
 					{
 						await file.WriteAsync(bytes);
 					}
 				}
 				bytes = null;
-				await RecordDb.Create(record);
+				using (var db = new RecordDb())
+					await db.Create(record);
 			}
 			catch
 			{
@@ -85,10 +124,7 @@ namespace GuideOneServer.Controllers.api
 			record.PhotoPath = null;
 			record.Path = null;
 			if (record.Id != 0)
-			{
-				var res = new { Record = record };
-				return new JsonResult(res);
-			}
+				return new JsonResult(new { Record = record });
 			else 
 				return new JsonResult(new { Status = "Error"});
 
@@ -98,8 +134,10 @@ namespace GuideOneServer.Controllers.api
 		[HttpPut]
 		public async Task<JsonResult> Put()
 		{
+			var rez = false;
 			var record = ((JObject)HttpContext.Items["JSON"]).GetValue("Record").ToObject<Record>();
-			var rez = await RecordDb.Edit(record);
+			using (var db = new RecordDb())
+				rez = await db.Edit(record);
 			var resp = new { Success = rez };
 			return new JsonResult(resp);
 		}
@@ -107,8 +145,10 @@ namespace GuideOneServer.Controllers.api
 		[HttpDelete]
 		public async Task<JsonResult> Delete()
 		{
+			var rez = false;
 			var record = ((JObject)HttpContext.Items["JSON"]).GetValue("Record").ToObject<Record>();
-			var rez = await RecordDb.Delete(record);
+			using (var db = new RecordDb())
+				rez = await db.Delete(record);
 			var resp = new { Success = rez };
 			return new JsonResult(resp);
 		}

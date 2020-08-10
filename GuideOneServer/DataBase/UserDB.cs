@@ -11,188 +11,134 @@ using System.Threading.Tasks;
 
 namespace GuideOneServer.DataBase
 {
-	public static class UserDB
+	public class UserDB : DbBase
 	{
-		public static string connectionString;
 
-		public async static Task GetAuth(User user)
+		public async Task GetAuth(User user)
 		{
-
-			using (SqlConnection con = new SqlConnection(connectionString))
+			SqlDataReader rdr = await ExecuteProcedureReaderAsync("GetUserAuth", ("@userId", (long)user.Id),
+				("@idAuth", (long)user.AuthId));
+			if (rdr.Read())
 			{
-				SqlCommand cmd = new SqlCommand("GetUserAuth", con);
-				cmd.CommandType = CommandType.StoredProcedure;
-				cmd.Parameters.AddWithValue("@userId", (long)user.Id);
-				cmd.Parameters.AddWithValue("@idAuth", (long)user.AuthId);
-				//https://social.technet.microsoft.com/wiki/contents/articles/51324.asp-net-core-2-0-crud-operation-with-ado-net.aspx
-
-				await con.OpenAsync();
-				SqlDataReader rdr = cmd.ExecuteReader();
-				if (rdr.Read())
-				{
-					user.Token = rdr["Token"].ToString();
-					user.PublicKey = rdr["PublicKey"].ToString();
-					user.IsConfirmed = Convert.ToBoolean(rdr["IsConfirmed"]?.ToString());
-				}
-				await con.CloseAsync();
+				user.Token = rdr["Token"].ToString();
+				user.PublicKey = rdr["PublicKey"].ToString();
+				user.IsConfirmed = Convert.ToBoolean(rdr["IsConfirmed"]?.ToString());
 			}
+			Close();
 		}
 
-		public async static Task GetRole(User user)
+		public async Task GetRole(User user)
 		{
-			using (SqlConnection con = new SqlConnection(connectionString))
-			{
-				SqlCommand cmd = new SqlCommand("GetUserRole", con);
-				cmd.CommandType = CommandType.StoredProcedure;
-				cmd.Parameters.AddWithValue("@userId", user.Id);
-				cmd.Parameters.AddWithValue("@phone", user.Phone);
-				//https://social.technet.microsoft.com/wiki/contents/articles/51324.asp-net-core-2-0-crud-operation-with-ado-net.aspx
-
-				await con.OpenAsync();
-				SqlDataReader rdr = cmd.ExecuteReader();
-				if (rdr.Read())
-					user.Role = rdr["Role"].ToString();
-				await con.CloseAsync();
-			}
+			var prms = new (string, object)[] { ("@userId", user.Id), ("@phone", user.Phone) };
+			SqlDataReader rdr = await ExecuteProcedureReaderAsync("GetUserRole", prms);
+			if (rdr.Read())
+				user.Role = rdr["Role"].ToString();
+			Close();
 		}
 
-		public async static Task Register(User user, string code)
+		public async  Task Register(User user, string code)
 		{
-			using (SqlConnection con = new SqlConnection(connectionString))
+			var prms = new (string, object)[]
 			{
-				SqlCommand cmd = new SqlCommand("CreateUser", con);
-				cmd.CommandType = CommandType.StoredProcedure;
-				cmd.Parameters.AddWithValue("@phone", user.Phone);
-				cmd.Parameters.AddWithValue("@publicKey", user.PublicKey);
-				cmd.Parameters.AddWithValue("@token", user.Token);
-				cmd.Parameters.AddWithValue("@code", code);
-				cmd.Parameters.AddWithValue("@role", user.Role);
-				//https://social.technet.microsoft.com/wiki/contents/articles/51324.asp-net-core-2-0-crud-operation-with-ado-net.aspx
-
-				await con.OpenAsync();
-				SqlDataReader rdr = cmd.ExecuteReader();
-				if (rdr.Read())
-				{
-					user.Id = (uint)Convert.ToInt64(rdr["UserId"].ToString());
-					user.AuthId = (uint)Convert.ToInt64(rdr["AuthId"].ToString());
-				}
-				await con.CloseAsync();
+				("@phone", user.Phone),
+				("@publicKey", user.PublicKey),
+				("@token", user.Token),
+				("@code", code),
+				("@role", user.Role)
+			};
+			SqlDataReader rdr = await ExecuteProcedureReaderAsync("CreateUser", prms);
+			if (rdr.Read())
+			{
+				user.Id = (uint)Convert.ToInt64(rdr["UserId"].ToString());
+				user.AuthId = (uint)Convert.ToInt64(rdr["AuthId"].ToString());
 			}
+			Close();
 		}
 
-		public async static Task<bool> Confirm(User user, string code)
+		public async Task<bool> Confirm(User user, string code)
 		{
 			bool rez = false;
-			using (SqlConnection con = new SqlConnection(connectionString))
+			var prms = new (string, object)[]
 			{
-				SqlCommand cmd = new SqlCommand("ConfirmUser", con);
-				cmd.CommandType = CommandType.StoredProcedure;
-				cmd.Parameters.AddWithValue("@userId", (long)user.Id);
-				cmd.Parameters.AddWithValue("@authId", (long)user.AuthId);
-				cmd.Parameters.AddWithValue("@code", code);
-				//https://social.technet.microsoft.com/wiki/contents/articles/51324.asp-net-core-2-0-crud-operation-with-ado-net.aspx
-
-				await con.OpenAsync();
-				SqlDataReader rdr = cmd.ExecuteReader();
-				if (rdr.Read())
-				{
-					rez = Convert.ToBoolean(rdr["IsConfirmed"].ToString());
-					user.Name = rdr["Name"].ToString();
-					user.SecondName = rdr["SecondName"].ToString();
-					user.CompanyId = GetCompanyId(rdr);
-					user.HourPrice = GetHourPrice(rdr);
-				}
-				await con.CloseAsync();
+				("@userId", (long)user.Id),
+				("@authId", (long)user.AuthId),
+				("@code", code)
+			};
+			SqlDataReader rdr = await ExecuteProcedureReaderAsync("ConfirmUser", prms);
+			if (rdr.Read())
+			{
+				rez = Convert.ToBoolean(rdr["IsConfirmed"].ToString());
+				user.Name = rdr["Name"].ToString();
+				user.SecondName = rdr["SecondName"].ToString();
+				user.CompanyId = GetCompanyId(rdr);
+				user.HourPrice = GetHourPrice(rdr);
 			}
+			Close();
 			return rez;
 		}
 
-		public async static Task<bool> Logout(User user)
+		public async  Task<bool> Logout(User user)
 		{
-			bool rez = false;
-			using (SqlConnection con = new SqlConnection(connectionString))
+			var rez = false;
+			var prms = new (string, object)[]
 			{
-				SqlCommand cmd = new SqlCommand("DeleteUserAuth", con);
-				cmd.CommandType = CommandType.StoredProcedure;
-				cmd.Parameters.AddWithValue("@userId", (long)user.Id);
-				cmd.Parameters.AddWithValue("@authId", (long)user.AuthId);
-				//https://social.technet.microsoft.com/wiki/contents/articles/51324.asp-net-core-2-0-crud-operation-with-ado-net.aspx
-				await con.OpenAsync();
-				SqlDataReader rdr = cmd.ExecuteReader();
-				if (rdr.Read())
-					rez = Convert.ToBoolean(Convert.ToInt16(rdr["IsConfirmed"].ToString()));
-				await con.CloseAsync();
-			}
+				("@userId", (long)user.Id),
+				("@authId", (long)user.AuthId)
+			};
+			var rdr = await ExecuteProcedureReaderAsync("DeleteUserAuth", prms);
+			if (rdr.Read())
+				rez = Convert.ToBoolean(Convert.ToInt16(rdr["IsConfirmed"].ToString()));
+			Close();
 			return rez;
 		}
 
-		public async static Task<bool> Delete(User user)
+		public async Task<bool> Delete(User user)
 		{
-			bool rez = false;
-			using (SqlConnection con = new SqlConnection(connectionString))
-			{
-				SqlCommand cmd = new SqlCommand("DeleteUser", con);
-				cmd.CommandType = CommandType.StoredProcedure;
-				cmd.Parameters.AddWithValue("@userId", user.Id);
-				//https://social.technet.microsoft.com/wiki/contents/articles/51324.asp-net-core-2-0-crud-operation-with-ado-net.aspx
-
-				await con.OpenAsync();
-				SqlDataReader rdr = cmd.ExecuteReader();
-				if (rdr.Read())
-					rez = Convert.ToBoolean(Convert.ToInt16(rdr["IsConfirmed"].ToString()));
-				await con.CloseAsync();
-			}
+			var rez = false;
+			var rdr = await ExecuteProcedureReaderAsync("DeleteUser", ("@userId", user.Id));
+			if (rdr.Read())
+				rez = Convert.ToBoolean(Convert.ToInt16(rdr["IsConfirmed"].ToString()));
+			Close();
 			return rez;
 		}
 
-		public async static Task Edit(User user)
+		public async Task Edit(User user)
 		{
-			using (SqlConnection con = new SqlConnection(connectionString))
-			{
-				SqlCommand cmd = new SqlCommand("AlterUser", con);
-				cmd.CommandType = CommandType.StoredProcedure;
-				cmd.Parameters.AddWithValue("@userId", (long)user.Id);
-				cmd.Parameters.AddWithValue("@name", user.Name);
-				cmd.Parameters.AddWithValue("@secondName", user.SecondName);
-				cmd.Parameters.AddWithValue("@companyId", user.CompanyId);
-				cmd.Parameters.AddWithValue("@hourPrice", user.HourPrice);
-				//https://social.technet.microsoft.com/wiki/contents/articles/51324.asp-net-core-2-0-crud-operation-with-ado-net.aspx
 
-				await con.OpenAsync();
-				SqlDataReader rdr = cmd.ExecuteReader();
-				if (rdr.Read())
-				{
-					user.Name = rdr["Name"].ToString();
-					user.SecondName = rdr["SecondName"].ToString();
-					user.CompanyId = GetCompanyId(rdr);
-					user.HourPrice = GetHourPrice(rdr);
-				}
-				await con.CloseAsync();
+			var prms = new (string, object)[]
+			{
+				("@userId", (long)user.Id),
+				("@name", user.Name),
+				("@secondName", user.SecondName),
+				("@companyId", user.CompanyId),
+				("@hourPrice", user.HourPrice)
+			};
+			var rdr = await ExecuteProcedureReaderAsync("AlterUser", prms);
+			if (rdr.Read())
+			{
+				user.Name = rdr["Name"].ToString();
+				user.SecondName = rdr["SecondName"].ToString();
+				user.CompanyId = GetCompanyId(rdr);
+				user.HourPrice = GetHourPrice(rdr);
 			}
+			Close();
 		}
 
-		public async static Task<User> Get(User user, int reqUserId)
+		public async Task<User> Get(User user, int reqUserId)
 		{
-			User requestedUSer = null;
-			using (SqlConnection con = new SqlConnection(connectionString))
+			var requestedUSer = (User)null;
+			var prms = new (string, object)[]
+			{   ("@userId", (long)user.Id),
+				("@reqUserId", reqUserId)
+			};
+			var rdr = await ExecuteProcedureReaderAsync("GetUser", prms);
+			if (rdr.Read())
 			{
-				SqlCommand cmd = new SqlCommand("GetUser", con);
-				cmd.CommandType = CommandType.StoredProcedure;
-				cmd.Parameters.AddWithValue("@userId", (long)user.Id);
-				cmd.Parameters.AddWithValue("@reqUserId", reqUserId);
-				//https://social.technet.microsoft.com/wiki/contents/articles/51324.asp-net-core-2-0-crud-operation-with-ado-net.aspx
-
-				await con.OpenAsync();
-				SqlDataReader rdr = cmd.ExecuteReader();
-				if (rdr.Read())
-				{
-					requestedUSer = new User();
-					requestedUSer.Name = rdr["Name"].ToString();
-					requestedUSer.SecondName = rdr["SecondName"].ToString();
-					requestedUSer.CompanyId = GetCompanyId(rdr);
-					requestedUSer.HourPrice = GetHourPrice(rdr);
-				}
-				await con.CloseAsync();
+				requestedUSer = new User();
+				requestedUSer.Name = rdr["Name"].ToString();
+				requestedUSer.SecondName = rdr["SecondName"].ToString();
+				requestedUSer.CompanyId = GetCompanyId(rdr);
+				requestedUSer.HourPrice = GetHourPrice(rdr);
 			}
 			return requestedUSer;
 		}

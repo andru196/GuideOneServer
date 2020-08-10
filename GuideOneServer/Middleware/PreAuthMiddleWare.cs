@@ -43,7 +43,8 @@ namespace GuideOneServer.Moddleware
 				var user = (User)context.Items[typeof(User).Name];
 				if (user.AuthId != null)
 				{
-					await UserDB.GetAuth(user);
+					using (var db = new UserDB())
+						await db.GetAuth(user);
 					var tokenBytes = Encoding.ASCII.GetBytes(user.Token);
 					var bytes = (byte[])context.Items["Content"];
 					var bytesToHash = new byte[tokenBytes.Length + bytes.Length];
@@ -66,12 +67,9 @@ namespace GuideOneServer.Moddleware
 			{
 				context.Response.StatusCode = 409;
 				await context.Response.WriteAsync($"Auth Error\n{ex.Message}");
+				return;
 			}
 			await next.Invoke(context);
-			//TODO:
-			//Сравнить хеш контента + токен с указанным хешом
-			//если не равны или если 1отсутствует 2нет юзера 3не пост запрос выдать ошибку
-			//иначе подадставить в хед токен из найденных
 		}
 	}
 }

@@ -15,7 +15,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
-using GuideOneServer.DBContextModel;
+//using GuideOneServer.DBContextModel;
 using GuideOneServer.DataBase;
 using Microsoft.IdentityModel.Logging;
 using Microsoft.AspNetCore.Mvc.NewtonsoftJson;
@@ -35,11 +35,7 @@ namespace GuideOneServer
 		public void ConfigureServices(IServiceCollection services)
 		{
 			string connection = Configuration.GetConnectionString("TestConnection");
-			UserDB.connectionString = connection;
-			RecordDb.connectionString = connection;
-
-			services.AddDbContext<UsersContext>(options =>
-				options.UseSqlServer(connection));
+			DbBase.ConnectionString = connection;
 
 			services.Configure<Config>(options => Configuration.GetSection("Config").Bind(options));
 
@@ -65,7 +61,6 @@ namespace GuideOneServer
 		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
 		public void Configure(IApplicationBuilder app, IWebHostEnvironment env, ILoggerFactory loggerFactory)
 		{
-
 			//Коневеер
 			app.UseMiddleware<JsonParseMiddleware>();
 			app.UseMiddleware<PreAuthMiddleWare>();
@@ -80,6 +75,7 @@ namespace GuideOneServer
 			//app.UseHttpsRedirection();
 
 			app.UseRouting();
+
 			//авторизация
 			app.UseAuthentication();
 			app.UseAuthorization();

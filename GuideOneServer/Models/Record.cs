@@ -13,8 +13,11 @@ namespace GuideOneServer.Models
 	{
 		public uint Id { get; set; }
 		public string Name { get; set; }
-		[JsonProperty(NullValueHandling = NullValueHandling.Ignore, PropertyName = "Audio")]
+		[JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
 		public string Path { get; set; }
+		[JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+		public string Audio { get; set; }
+		public string Description { get; set; }
 		public int Duaration { get; set; }
 		public DateTime DateTime { get; set; }
 		[JsonIgnore]
@@ -33,5 +36,6 @@ namespace GuideOneServer.Models
 		[JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
 		public string UserWhoCanSee { get; set; }
 		public string Language { get; set; }
+		public double? Raiting { get; set; }
 	}
 }

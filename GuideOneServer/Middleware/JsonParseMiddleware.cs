@@ -31,7 +31,11 @@ namespace GuideOneServer.Middleware
 					throw new Exception("Сообщение слишком большое");
 				var bytes = new byte[length];
 				context.Items["Content"] = bytes;
-				var count =	await request.Body.ReadAsync(bytes, 0, length);
+				var count = 0;
+				while (count < length)
+				{
+					count += await request.Body.ReadAsync(bytes, count, length - count);
+				}
 				using (var stream = new System.IO.StreamReader(new MemoryStream(bytes)))
 				{
 					using (var jstream = new JsonTextReader(stream))
@@ -46,13 +50,13 @@ namespace GuideOneServer.Middleware
 						await request.Body.DisposeAsync();
 					}
 				}
+				await next.Invoke(context);
 			}
 			catch (Exception ex)
 			{
 				context.Response.StatusCode = 418;
 				await context.Response.WriteAsync($"I’m a teapot... Not, it's you\n{ex.Message}");
 			}
-			await next.Invoke(context);
 		}
 	}
 }

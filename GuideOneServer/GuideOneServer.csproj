@@ -14,6 +14,7 @@
     <PackageReference Include="NetTopologySuite" Version="2.0.0" />
     <PackageReference Include="System.Data.SqlClient" Version="4.8.1" />
     <PackageReference Include="System.Spatial" Version="5.8.4" />
+    <PackageReference Include="TLSharp" Version="0.1.0.555" />
   </ItemGroup>
 
   <ItemGroup>

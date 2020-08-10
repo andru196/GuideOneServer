@@ -2,8 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Text.Json.Serialization;
-using System.Text.Json;
+//using System.Text.Json.Serialization;
+//using System.Text.Json;
+using Newtonsoft.Json;
 using NetTopologySuite.Geometries;
 using NetTopologySuite;
 
@@ -11,26 +12,31 @@ namespace GuideOneServer.Helpers
 {
 	public class PointJsonConverter : JsonConverter<Point>
 	{
-		public override Point Read(ref Utf8JsonReader reader,
-			Type typeToConvert,
-			JsonSerializerOptions options)
+		public override Point ReadJson(JsonReader reader, Type objectType, Point existingValue, bool hasExistingValue, JsonSerializer serializer)
 		{
+		
 			double lat = 0, lon = 0;
-			int i = 0;
-			while (reader.Read() && i < 2)
+			try
 			{
-				i++;
-				var name = reader.GetString().ToLower();
-				reader.Read();
-				switch (name)
-				{
-					case "latitude":
-						lat = reader.GetDouble();
-						break;
-					case "longitude":
-						lon = reader.GetDouble();
-						break;
-				}
+				var readed = reader.Read();
+				for (var i = 0; i < 6 && readed && (lat == 0 || lon == 0) && reader.TokenType != JsonToken.EndObject; i++)
+					if (reader.TokenType == JsonToken.PropertyName)
+						switch (reader.Value)
+						{
+							case "Latitude":
+								lat = reader.ReadAsDouble().GetValueOrDefault();
+								break;
+							case "Longitude":
+								lon = reader.ReadAsDouble().GetValueOrDefault();
+								break;
+						}
+					else
+						readed = reader.Read();
+
+			}
+			catch (Exception ex)
+			{
+
 			}
 			if (lat == 0 || lon == 0)
 				return null;
@@ -40,13 +46,14 @@ namespace GuideOneServer.Helpers
 				));
 		}
 
-		public override void Write(
-			Utf8JsonWriter writer, Point point,
-			JsonSerializerOptions options)
+
+		public override void WriteJson(JsonWriter writer, Point point, JsonSerializer serializer)
 		{
 			writer.WriteStartObject();
-			writer.WriteNumber("Latitude", point.Coordinate.X);
-			writer.WriteNumber("Longitude", point.Coordinate.Y); ;
+			writer.WritePropertyName("Latitude");
+			writer.WriteValue(point.Coordinate.X);
+			writer.WritePropertyName("Longitude");
+			writer.WriteValue(point.Coordinate.Y); ;
 			writer.WriteEndObject();
 		}
 	}
